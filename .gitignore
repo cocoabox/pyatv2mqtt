@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+venv/pyatv_venv/
+venv/yt_dlp_venv/
+venv/*.txz
+certs/*
+!certs/README.md
+config.json5

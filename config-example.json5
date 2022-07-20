@@ -1,0 +1,32 @@
+{
+    mqtt: {
+        host: 'my-mqtt-server',
+        port: 8883,
+        key: 'file:certs/key.pem',           // relative to the GIT ROOT directory; or "base64:*****"
+        cert: 'file:certs/cert.pem',         // (ditto)
+        ca: 'file:certs/cert-chain.pem',     // (ditto)
+        username: 'username',
+        password: 'plaintext-password',
+    },
+    pyatv_venv_dir: 'venv/pyatv_venv/',      // relative to the GIT ROOT directory
+    yt_dlp_venv_dir: 'venv/yt_dlp_venv/',    // relative to the GIT ROOT directory
+    devices: [
+        {
+            nickname: "bedroom",
+            identifier: "xx:xx:xx:xx:xx:xx",
+            credentials: {
+                airplay: "***",
+                companion: "***",
+            },
+        },
+        {
+            nickname: "living-room",
+            identifier: "xx:xx:xx:xx:xx:xx",
+            credentials: {
+                airplay: "***",
+                companion: "***",
+            },
+        }
+    ],
+}
+

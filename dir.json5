@@ -1,0 +1,6 @@
+{
+    news24: 'https://n24-cdn-live.ntv.co.jp/ch01/index_high.m3u8',
+    'weather-news': 'https://www.youtube.com/watch?v=zAdWzjab1B8',
+    japanews24: 'https://www.youtube.com/watch?v=coYw-eVU0Ks',
+    shinjuku: 'https://www.youtube.com/watch?v=KP56AHqrMn8',
+}
