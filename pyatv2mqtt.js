@@ -400,18 +400,43 @@ class Pyatv2mqtt {
             this._pub_result(topic, {youtube:youtube_url, 'no-youtube-dl-configured': 1});
             return;
         }
+
+        // get the hash "#..." of the URL excluding the hash mark
+        const hash = (URL.parse(youtube_url)?.hash || '#').substr(1).toLowerCase().trim();
+        const requested_playlist_idx = hash === 'random' ? 'random'
+            : hash.match(/^[0-9]+$/) ? parseInt(hash)
+            : 0;
+
         let media_url;
         try{ 
             media_url = await get_media_url(this._youtube_dl_venv_dir, youtube_url);
             if (Array.isArray(media_url)) {
-                console.warn('WARNING: multiple URLs returnedl; playing the first one');
-                media_url = media_url[0];
+                console.warn('[YOUTUBE] multiple URLs returned');
+                if (requested_playlist_idx === 'random') {
+                    const idx = Math.round(Math.random() * (media_url.length - 1));
+                    console.warn('[YOUTUBE] random idx :', idx);
+                    media_url = media_url[ idx ];
+                }
+                else if (requested_playlist_idx < 0) {
+                    // -1 means last 
+                    // -2 means second last , etc
+                    const idx = media_url.length + requested_playlist_idx;
+                    media_url = media_url[ idx ];
+                    console.warn('[YOUTUBE] requested idx :', idx);
+                }
+                else {
+                    console.warn('[YOUTUBE] requested idx :', requested_playlist_idx);
+                    media_url = media_url[requested_playlist_idx];
+                }
+                if (! media_url) {
+                    console.warn(`[YOUTUBE] error: no media URL at index ${requested_playlist_idx}`);
+                    return this._pub_result(topic, {youtube:youtube_url, 'playlist-index-error': 1});
+                }
             }
         }
         catch(e) {
             console.warn('[open_youtube] FAIL because youtube-dl returned error', e);
-            this._pub_result(topic, {youtube:youtube_url, 'youtube-dl-error': 1});
-            return;
+            return this._pub_result(topic, {youtube:youtube_url, 'youtube-dl-error': 1});
         }
         return this.play_url(identifier, media_url, topic);
     }

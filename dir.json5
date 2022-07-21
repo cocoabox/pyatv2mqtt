@@ -1,6 +1,10 @@
 {
+    'sky-news': 'https://www.youtube.com/watch?v=9Auq9mYxFEE',
+    'dw-news': 'https://www.youtube.com/watch?v=GE_SfNVNyqk',
     news24: 'https://n24-cdn-live.ntv.co.jp/ch01/index_high.m3u8',
     'weather-news': 'https://www.youtube.com/watch?v=zAdWzjab1B8',
     japanews24: 'https://www.youtube.com/watch?v=coYw-eVU0Ks',
     shinjuku: 'https://www.youtube.com/watch?v=KP56AHqrMn8',
+    'tbs-news': 'https://www.youtube.com/watch?v=H3D90-436C4',
+    'おバイオ':'https://www.youtube.com/playlist?list=PLXgvhpxzP8HQu_rN3grefrUwvin75gcOe#random',
 }
