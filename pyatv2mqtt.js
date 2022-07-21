@@ -75,6 +75,8 @@ class Pyatv2mqtt {
      */
     async scan() {
         try {
+            const start_scan_time = Date.now();
+
             const {out} = await run_atvscript(this._venv_dir, null, null, 'scan');
             console.log("OUT=",out);
             if (Array.isArray(out?.devices)) {
@@ -176,9 +178,11 @@ class Pyatv2mqtt {
                         device);
                 }
             }
+            console.log('[SCAN] took', Math.round((Date.now() - start_scan_time)/1000),'seconds');
             return {devices: this._devices};
         }
         catch (scan_error) {
+            console.log('[SCAN] failed, but it took', Math.round((Date.now() - start_scan_time)/1000),'seconds');
             console.warn('failed to scan for devices', scan_error);
             return {scan_error};
         }
@@ -194,7 +198,12 @@ class Pyatv2mqtt {
 
     start_scanning() {
         this._scan_timer = setInterval(async () => {
+            if(this._is_scanning) {
+                console.warn('[SCAN] abort because another scan is in progress');
+                return;
+            }
             await this.scan();
+            this._is_scanning = false;
         }, this._scan_interval * 1000);
     }
 

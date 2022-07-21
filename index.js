@@ -37,6 +37,8 @@ client_instance = new Pyatv2mqtt(
     {
         directory: dir.body,
         yt_dlp_venv_dir: path.resolve(__dirname, conf.parse_key('yt_dlp_venv_dir')),
+        scan_interval: conf.body.scan_interval * 60,
+        dir_interval: conf.body.dir_interval * 60,
     }
 );
 
