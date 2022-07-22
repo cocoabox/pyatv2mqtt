@@ -7,6 +7,8 @@ const URL = require('url');
 
 const {run_atvremote, run_atvscript} = require('./run-pyatv');
 const {get_media_url} = require('./run-youtube-dl');
+const {niconico_get_download_link, niconico_expand_mylist} = require('./niconico-get-download-link');
+const {detect_4xx_using_curl} = require('./detect-4xx-using-curl');
 
 // the followings are constant, dont change
 
@@ -21,10 +23,12 @@ class Pyatv2mqtt {
             dir_interval: 80, // sec
             directory: {},
             yt_dlp_venv_dir: '',
+            niconico_venv_dir: '',
         }, opts);
 
-        this._venv_dir = venv_dir;
+        this._venv_dir = venv_dir; // pyatv venv directory
         this._youtube_dl_venv_dir = opts.yt_dlp_venv_dir;
+        this._niconico_venv_dir = opts.niconico_venv_dir;
 
         this._device_defs = device_defs;
         this._devices = {};
@@ -74,9 +78,8 @@ class Pyatv2mqtt {
      * timer function every 60 sec for scanning devices in network
      */
     async scan() {
+        const start_scan_time = Date.now();
         try {
-            const start_scan_time = Date.now();
-
             const {out} = await run_atvscript(this._venv_dir, null, null, 'scan');
             console.log("OUT=",out);
             if (Array.isArray(out?.devices)) {
@@ -374,8 +377,11 @@ class Pyatv2mqtt {
         let youtube_ident;
         const parsed_url = URL.parse(open_what);
         if (parsed_url.protocol) {
-            if (['www.youtube.com', 'youtube.com', 'youtu.be'].indexOf(parsed_url.hostname) >= 0) {
+            if (['www.youtube.com', 'youtube.com', 'youtu.be'].includes(parsed_url.hostname)) {
                 return await this.open_youtube(identifier, open_what, topic);
+            }
+            else if (['nico.ms', 'www.nicovideo.jp'].includes(parsed_url.hostname)) {
+                return await this.open_niconico(identifier, open_what, topic);
             }
             else {
                 return await this.play_url(identifier, open_what, topic);
@@ -384,6 +390,7 @@ class Pyatv2mqtt {
         else if (!!( youtube_ident = open_what.match(/^youtube:(.*)$/)?.[1] )) { 
             return await this.open_youtube(identifier, youtube_ident, topic);
         }
+
         if (opts.allow_dir && open_what in this._directory) {
             return await this.execute_open(identifier, this._directory[open_what], topic, 
                 {allow_dir: false}); // prevent circular dir reference
@@ -394,9 +401,98 @@ class Pyatv2mqtt {
         }
     }
 
+    async open_niconico(identifier, nico_url, topic) {
+        if (! this._niconico_venv_dir) {
+            console.warn('[open_niconico] FAIL because niconico is not configured');
+            this._pub_result(topic, {niconico:nico_url, 'no-niconico-configured': 1});
+            return;
+        }
+        let nico_url2 = nico_url;
+
+        if (nico_url.indexOf('mylist') > 0) {
+            console.warn('[open_niconico] expanding mylist');
+            // get the hash "#..." of the URL excluding the hash mark
+            const hash = (URL.parse(nico_url)?.hash || '#').substr(1).toLowerCase().trim();
+            const requested_playlist_idx = hash === 'random' ? 'random'
+                : hash.match(/^[0-9]+$/) ? parseInt(hash)
+                : 0;
+            try {
+                let urls = await niconico_expand_mylist(this._niconico_venv_dir, nico_url);
+                // console.debug('[open_niconico] urls=', urls);
+                const is_random = requested_playlist_idx === 'random';
+                if (urls?.length > 0) {
+                    let got_good_url = false;
+                    while (! got_good_url) {
+                        // for random selections, some MyList items may have been deleted
+                        // if so, keep trying until we get something good
+                        let idx;
+                        if (is_random) {
+                            idx = Math.round(Math.random() * (urls.length - 1));
+                            console.warn('[open_niconico] random idx :', idx);
+                            nico_url2 = urls[ idx ];
+                        }
+                        else if (requested_playlist_idx < 0) {
+                            // -1 means last 
+                            // -2 means second last , etc
+                            idx = urls.length + requested_playlist_idx;
+                            nico_url2 = urls[ idx ];
+                            console.warn('[open_niconico] requested idx :', idx);
+                        }
+                        else {
+                            console.warn('[open_niconico] requested idx :', requested_playlist_idx);
+                            nico_url2 = urls[requested_playlist_idx];
+                            idx = requested_playlist_idx;
+                        }
+                        if (! nico_url2) {
+                            console.warn(`[open_niconico] error: no media URL at index ${requested_playlist_idx}`);
+                            return this._pub_result(topic, {niconico:nico_url, 'mylist-index-error': 1});
+                        }
+                        got_good_url = await detect_4xx_using_curl(nico_url2);
+                        if (is_random) {
+                            if (! got_good_url) {
+                                const removed_url = urls.splice(idx, 1);
+                                console.warn('[open_niconico] WARNING : removing bad URL and retry :', removed_url);
+                            }
+                            if (urls.length === 0) {
+                                console.warn('[open_niconico] ERROR : no more URLS found in given my-list. all bad ???');
+                                throw {error: 'empty-mylist-or-all-missing'};
+                            }
+                        }
+                        else {
+                            console.warn('[open_niconico] URL is not accessible');
+                            throw {error:'bad-url'};
+                        }
+                    }
+                }
+                else {
+                    cosole.warn('[open_niconico] empty mylist');
+                    throw {error: 'empty-mylist'};
+                }
+            }
+            catch (e) {
+                console.warn('[open_niconico] error:', e);
+                return this._pub_result(topic, {niconico:nico_url, [
+                    typeof e.error ==='string' ? e.error : 'mylist-other-error'
+                ]: 1});
+            }
+        }
+        console.warn('[open_niconico] trying to get media URL of', nico_url2);
+
+        let download_link;
+        try {
+            download_link = await niconico_get_download_link(this._niconico_venv_dir, nico_url2);
+        }
+        catch (error) {
+            console.warn('[open_niconico] FAIL because niconico.py returned error', error);
+            return this._pub_result(topic, {niconico:nico_url, 'niconico-py-error': 1});
+        }
+        return this.play_url(identifier, download_link, topic);
+    }
+
+
     async open_youtube(identifier, youtube_url, topic) {
         if (! this._youtube_dl_venv_dir) {
-            console.warn('[open_youtube] FAIL because youtube-dl not configured');
+            console.warn('[open_niconico] FAIL because youtube-dl not configured');
             this._pub_result(topic, {youtube:youtube_url, 'no-youtube-dl-configured': 1});
             return;
         }
