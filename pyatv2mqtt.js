@@ -293,6 +293,7 @@ class Pyatv2mqtt {
         return new Promise(resolve => {
             // see : https://nodejs.org/api/tls.html#tls_tls_createserver_options_secureconnectionlistener
             const connect_opts = {
+                clientId: 'pyatv2mqtt_' + Math.random().toString(16).substr(2, 8)
                 protocol: 'mqtts', 
                 host: this._host,
                 port: this._port,
